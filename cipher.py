@@ -3,12 +3,34 @@ from Crypto.Cipher import AES
 from Crypto.Hash import SHA256
 from Crypto.Util import Padding
 
+def encrypt_file(input_path, output_path, password):
+    cipher = AESCipher(password)
+    inp = open(input_path, "rb")
+    out = open(output_path, "wb")
+    data = inp.read(cipher.block_size)
+    while data:
+        out.write(cipher.encrypt(data))
+        data = inp.read(cipher.block_size)
+    inp.close()
+    out.close()
+
+def decrypt_file(input_path, output_path, password):
+    cipher = AESCipher(password)
+    inp = open(input_path, "rb")
+    out = open(output_path, "wb")
+    data = inp.read(cipher.chunk_size)
+    while data:
+        out.write(cipher.decrypt(data))
+        data = inp.read(cipher.chunk_size)
+    inp.close()
+    out.close()
+
 class AESCipher(object):
     def __init__(self, password):
         self.block_size = 239 
         self.padding_bytes = 1
         self.enc_block = self.block_size + self.padding_bytes
-        self.chunk_size = self.block_size + 1 + AES.block_size
+        self.chunk_size = self.enc_block + AES.block_size
         self.key = SHA256.new(password.encode("ascii")).digest()
 
     def encrypt(self, raw):
