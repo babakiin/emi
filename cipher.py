@@ -28,6 +28,7 @@ def decrypt_file(input_path, output_path, password, chunk_size=4096):
 class AESCipher(object):
     def __init__(self, password, chunk_size=4096):
         self.padding_bytes = 2
+        self.byte_order = "big"
         self.block_size = chunk_size - (self.padding_bytes + AES.block_size)
         self.enc_block = chunk_size - AES.block_size
         self.chunk_size = self.enc_block + AES.block_size
@@ -65,8 +66,8 @@ class AESCipher(object):
         return data_to_unpad[:-(self.padding_bytes + padding_len)]
 
     def bitefy(self, number):
-        return number.to_bytes(self.padding_bytes, byteorder="big")
+        return number.to_bytes(self.padding_bytes, byteorder=self.byte_order)
 
     def unbitefy(self, sbytes):
-        return int.from_bytes(sbytes, byteorder="big")
+        return int.from_bytes(sbytes, byteorder=self.byte_order)
 
