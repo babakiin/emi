@@ -1,7 +1,9 @@
+import asyncio
 import logging
 import mimetypes
 import os
 import re
+import threading
 
 from tornado.wsgi import WSGIContainer
 from tornado.httpserver import HTTPServer
@@ -14,10 +16,6 @@ LOG = logging.getLogger(__name__)
 
 MB = 1 << 20
 BUFF_SIZE = 10 * MB
-
-@app.route("/")
-def hello():
-    return "Hello, World!"
 
 def partial_response(path, start, end=None):
     LOG.info("Requested: %s, %s", start, end)
@@ -68,15 +66,29 @@ def get_range(request):
     else:
         return 0, None
 
+@app.route("/")
+def home():
+    return "Hello, World!"
+
 @app.route("/video")
 def video():
-    path = "videos/Nightly.mp4"
+    path = "videos/Nightly01.mp4"
     start, end = get_range(request)
     return partial_response(path, start, end)
 
-if __name__ == "__main__":
+def start_tornado(event_loop):
+    asyncio.set_event_loop(event_loop)
+    IOLoop.instance().start()
+
+def main():
     logging.basicConfig(level=logging.INFO)
     HOST = "0.0.0.0"
     http_server = HTTPServer(WSGIContainer(app))
     http_server.listen(8080)
-    IOLoop.instance().start()
+    t1 = threading.Thread(target=start_tornado, args=[asyncio.get_event_loop()])
+    t1.start()
+    print("Hello")
+    t1.join()
+
+if __name__ == "__main__":
+    main()
