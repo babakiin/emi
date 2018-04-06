@@ -3,8 +3,8 @@ from Crypto.Cipher import AES
 from Crypto.Hash import SHA256
 from Crypto.Util import Padding
 
-def encrypt_file(input_path, output_path, password):
-    cipher = AESCipher(password)
+def encrypt_file(input_path, output_path, password, chunk_size=4096):
+    cipher = AESCipher(password, chunk_size)
     inp = open(input_path, "rb")
     out = open(output_path, "wb")
     data = inp.read(cipher.block_size)
@@ -14,8 +14,8 @@ def encrypt_file(input_path, output_path, password):
     inp.close()
     out.close()
 
-def decrypt_file(input_path, output_path, password):
-    cipher = AESCipher(password)
+def decrypt_file(input_path, output_path, password, chunk_size=4096):
+    cipher = AESCipher(password, chunk_size)
     inp = open(input_path, "rb")
     out = open(output_path, "wb")
     data = inp.read(cipher.chunk_size)
@@ -26,10 +26,10 @@ def decrypt_file(input_path, output_path, password):
     out.close()
 
 class AESCipher(object):
-    def __init__(self, password):
-        self.block_size = 239 
-        self.padding_bytes = 1
-        self.enc_block = self.block_size + self.padding_bytes
+    def __init__(self, password, chunk_size=4096):
+        self.padding_bytes = 2
+        self.block_size = chunk_size - (self.padding_bytes + AES.block_size)
+        self.enc_block = chunk_size - AES.block_size
         self.chunk_size = self.enc_block + AES.block_size
         self.key = SHA256.new(password.encode("ascii")).digest()
 
@@ -65,11 +65,8 @@ class AESCipher(object):
         return data_to_unpad[:-(self.padding_bytes + padding_len)]
 
     def bitefy(self, number):
-        sbytes = bytes([number])
-        assert len(sbytes) == self.padding_bytes
-        return sbytes
+        return number.to_bytes(self.padding_bytes, byteorder="big")
 
     def unbitefy(self, sbytes):
-        number = sbytes[0]
-        return number
+        return int.from_bytes(sbytes, byteorder="big")
 
