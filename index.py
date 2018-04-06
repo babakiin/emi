@@ -70,7 +70,7 @@ def get_range(request):
 
 @app.route("/video")
 def video():
-    path = "videos/Night_Shift_Nurses_01_BaixarHentai.net.mp4"
+    path = "videos/Nightly.mp4"
     start, end = get_range(request)
     return partial_response(path, start, end)
 
