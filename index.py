@@ -29,6 +29,30 @@ DESC = """A tool for viewing encrypted files."""
 MB = 1 << 20
 BUFF_SIZE = 10 * MB
 
+def generate(path, start, length):
+    chunk_jumped = math.floor(start / CIPHER.block_size)
+    start_index = chunk_jumped * CIPHER.chunk_size
+    chunks_to_read = math.ceil(length / CIPHER.block_size)
+    read_length = chunks_to_read * CIPHER.chunk_size
+    bytes_jumped = chunk_jumped * CIPHER.block_size
+    bytes_to_jump = start - bytes_jumped
+    fd = open(path, "rb")
+    fd.seek(start_index)
+    while length > 0:
+        chunk = fd.read(CIPHER.chunk_size)
+        plain = CIPHER.decrypt(chunk)
+        len_plain = len(plain)
+        plain = plain[bytes_to_jump:]
+        bytes_to_jump -= len_plain - len(plain)
+        len_plain = len(plain)
+        if length < len_plain:
+            length = 0
+            yield plain[:length]
+        else:
+            length -= len_plain
+            yield plain
+    return
+
 def partial_response(path, start, end=None):
     LOG.info("Requested: %s, %s", start, end)
     file_size = FILE_SIZE
@@ -36,39 +60,11 @@ def partial_response(path, start, end=None):
 
     # determine (end, length)
     if end is None:
-        end = start + BUFF_SIZE - 1
-    end = min(end, file_size - 1)
-    end = min(end, start + BUFF_SIZE - 1)
-    length = end - start + 1
-
-    chunk_jumped = math.floor(start / CIPHER.block_size)
-    start_index = chunk_jumped * CIPHER.chunk_size
-    chunks_to_read = math.ceil(length / CIPHER.block_size)
-    read_length = chunks_to_read * CIPHER.chunk_size
-
-    # read file
-    with open(path, "rb") as fd:
-        fd.seek(start_index)
-        sbytes = fd.read(read_length)
-    bytes_jumped = chunk_jumped * CIPHER.block_size
-    bytes_to_jump = start - bytes_jumped
-    data = bytes()
-    for i in range(chunks_to_read):
-        chunk = sbytes[i * CIPHER.chunk_size:][:CIPHER.chunk_size]
-        plain = CIPHER.decrypt(chunk)
-        len_plain = len(plain)
-        plain = plain[bytes_to_jump:]
-        bytes_to_jump -= len_plain - len(plain)
-        len_plain = len(plain)
-        if length < len_plain:
-            data += plain[:length]
-            length = 0
-            break
-        data += plain
-        length -= len_plain
+        end = file_size
+    length = end - start
 
     response = Response(
-        data,
+        generate(path, start, length),
         206,
         mimetype='video/mp4',
         direct_passthrough=True,
@@ -130,14 +126,14 @@ def main():
     FILE_SIZE = get_plain_size(PATH, CIPHER)
 
     logging.basicConfig(level=logging.INFO)
-    HOST = "0.0.0.0"
+    HOST = "127.0.0.1"
     http_server = HTTPServer(WSGIContainer(app))
     t1 = threading.Thread(target=start_tornado,
             args=[asyncio.get_event_loop(), http_server, args.port])
     t1.daemon = True
     t1.start()
-    pid = subprocess.Popen(["vlc", "http://" + HOST + ":" +
-        str(args.port) + "/video"])
+    pid = subprocess.Popen(["vlc",
+        "http://" + HOST + ":" + str(args.port) + "/video"])
     pid.wait()
     http_server.stop()
     IOLoop.instance().stop()
