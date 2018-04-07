@@ -3,6 +3,8 @@ import logging
 import mimetypes
 import os
 import re
+import subprocess
+import sys
 import threading
 
 from tornado.wsgi import WSGIContainer
@@ -72,7 +74,7 @@ def home():
 
 @app.route("/video")
 def video():
-    path = "videos/Nightly01.mp4"
+    path = "videos/Nightly.mp4"
     start, end = get_range(request)
     return partial_response(path, start, end)
 
@@ -83,12 +85,17 @@ def start_tornado(event_loop):
 def main():
     logging.basicConfig(level=logging.INFO)
     HOST = "0.0.0.0"
+    PORT = 8080
     http_server = HTTPServer(WSGIContainer(app))
-    http_server.listen(8080)
+    http_server.listen(PORT)
     t1 = threading.Thread(target=start_tornado, args=[asyncio.get_event_loop()])
+    t1.daemon = True
     t1.start()
-    print("Hello")
-    t1.join()
+    pid = subprocess.Popen(["vlc", "http://" + HOST + ":" + str(PORT) + "/video"])
+    pid.wait()
+    http_server.stop()
+    IOLoop.instance().stop()
+    sys.exit(0)
 
 if __name__ == "__main__":
     main()
