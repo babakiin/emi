@@ -7,6 +7,10 @@ import subprocess
 import sys
 import threading
 
+from tornado.wsgi import WSGIContainer
+from tornado.httpserver import HTTPServer
+from tornado.ioloop import IOLoop
+
 from flask import Flask, Response, request
 
 app = Flask(__name__)
@@ -74,18 +78,24 @@ def video():
     start, end = get_range(request)
     return partial_response(path, start, end)
 
-def start_server(port):
-    app.run(host="127.0.0.1", port=port)
+def start_tornado(event_loop):
+    asyncio.set_event_loop(event_loop)
+    IOLoop.instance().start()
 
 def main():
     logging.basicConfig(level=logging.INFO)
-    port = 8080
-    t1 = threading.Thread(target=start_server, args=(port,))
+    HOST = "0.0.0.0"
+    PORT = 8080
+    http_server = HTTPServer(WSGIContainer(app))
+    http_server.listen(PORT)
+    t1 = threading.Thread(target=start_tornado, args=[asyncio.get_event_loop()])
     t1.daemon = True
     t1.start()
-    pid = subprocess.Popen(["vlc",
-        "http://127.0.0.1" + ":" + str(port) + "/video"])
+    pid = subprocess.Popen(["cvlc", "http://" + HOST + ":" +
+        str(PORT) + "/video"])
     pid.wait()
+    http_server.stop()
+    IOLoop.instance().stop()
     sys.exit(0)
 
 if __name__ == "__main__":
