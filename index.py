@@ -1,3 +1,4 @@
+import argparse
 import asyncio
 import logging
 import mimetypes
@@ -15,6 +16,8 @@ from flask import Flask, Response, request
 
 app = Flask(__name__)
 LOG = logging.getLogger(__name__)
+PATH = str()
+DESC = """A tool for viewing encrypted files."""
 
 MB = 1 << 20
 BUFF_SIZE = 10 * MB
@@ -57,6 +60,8 @@ def partial_response(path, start, end=None):
 def get_range(request):
     rrange = request.headers.get("Range")
     LOG.info("Requested: %s", rrange)
+    if not rrange:
+        return 0, None
     m = re.match("bytes=(?P<start>\d+)-(?P<end>\d_)?", rrange)
     if m:
         start = m.group("start")
@@ -68,30 +73,32 @@ def get_range(request):
     else:
         return 0, None
 
-@app.route("/")
-def home():
-    return "Hello, World!"
-
 @app.route("/video")
 def video():
-    path = "videos/Nightly.mp4"
     start, end = get_range(request)
-    return partial_response(path, start, end)
+    return partial_response(PATH, start, end)
 
-def start_tornado(event_loop):
+def start_tornado(event_loop, http_server, port):
     asyncio.set_event_loop(event_loop)
+    http_server.listen(port)
     IOLoop.instance().start()
 
 def main():
+    global PATH
+    parser = argparse.ArgumentParser(description=DESC)
+    parser.add_argument("file_path", type=str,
+                        help="The encrypted file to be played.")
+    args = parser.parse_args()
+    PATH = args.file_path
     logging.basicConfig(level=logging.INFO)
     HOST = "0.0.0.0"
     PORT = 8080
     http_server = HTTPServer(WSGIContainer(app))
-    http_server.listen(PORT)
-    t1 = threading.Thread(target=start_tornado, args=[asyncio.get_event_loop()])
+    t1 = threading.Thread(target=start_tornado,
+            args=[asyncio.get_event_loop(), http_server, PORT])
     t1.daemon = True
     t1.start()
-    pid = subprocess.Popen(["cvlc", "http://" + HOST + ":" +
+    pid = subprocess.Popen(["vlc", "http://" + HOST + ":" +
         str(PORT) + "/video"])
     pid.wait()
     http_server.stop()
