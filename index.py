@@ -12,11 +12,15 @@ from tornado.wsgi import WSGIContainer
 from tornado.httpserver import HTTPServer
 from tornado.ioloop import IOLoop
 
+from cipher import AESCipher
+from file_cipher import get_plain_size
 from flask import Flask, Response, request
 
 app = Flask(__name__)
 LOG = logging.getLogger(__name__)
 PATH = str()
+PASSWORD = str()
+CHUNK_SIZE = 8192
 DESC = """A tool for viewing encrypted files."""
 
 MB = 1 << 20
@@ -84,22 +88,29 @@ def start_tornado(event_loop, http_server, port):
     IOLoop.instance().start()
 
 def main():
-    global PATH
+    global PATH, PASSWORD, CHUNK_SIZE
     parser = argparse.ArgumentParser(description=DESC)
     parser.add_argument("file_path", type=str,
                         help="The encrypted file to be played.")
+    parser.add_argument("password", type=str,
+                        help="Password to decrypt the file.")
+    parser.add_argument("-c", "--chunk_size", dest="chunk_size", type=int,
+                        default=8192, help="The size of encryption chunks.")
+    parser.add_argument("-p", "--port", dest="port", type=int, default=8080,
+                        help="The port where the internal server will run.")
     args = parser.parse_args()
     PATH = args.file_path
+    PASSWORD = args.password
+    CHUNK_SIZE = args.chunk_size
     logging.basicConfig(level=logging.INFO)
     HOST = "0.0.0.0"
-    PORT = 8080
     http_server = HTTPServer(WSGIContainer(app))
     t1 = threading.Thread(target=start_tornado,
-            args=[asyncio.get_event_loop(), http_server, PORT])
+            args=[asyncio.get_event_loop(), http_server, args.port])
     t1.daemon = True
     t1.start()
     pid = subprocess.Popen(["vlc", "http://" + HOST + ":" +
-        str(PORT) + "/video"])
+        str(args.port) + "/video"])
     pid.wait()
     http_server.stop()
     IOLoop.instance().stop()
