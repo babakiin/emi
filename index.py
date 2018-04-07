@@ -1,6 +1,7 @@
 import argparse
 import asyncio
 import logging
+import math
 import mimetypes
 import os
 import re
@@ -21,6 +22,8 @@ LOG = logging.getLogger(__name__)
 PATH = str()
 PASSWORD = str()
 CHUNK_SIZE = 8192
+FILE_SIZE = 0
+CIPHER = None
 DESC = """A tool for viewing encrypted files."""
 
 MB = 1 << 20
@@ -28,7 +31,8 @@ BUFF_SIZE = 10 * MB
 
 def partial_response(path, start, end=None):
     LOG.info("Requested: %s, %s", start, end)
-    file_size = os.path.getsize(path)
+    file_size = FILE_SIZE
+    print("FILE SIZE = " + str(file_size))
 
     # determine (end, length)
     if end is None:
@@ -37,16 +41,36 @@ def partial_response(path, start, end=None):
     end = min(end, start + BUFF_SIZE - 1)
     length = end - start + 1
 
+    chunk_jumped = math.floor(start / CIPHER.block_size)
+    start_index = chunk_jumped * CIPHER.chunk_size
+    chunks_to_read = math.ceil(length / CIPHER.block_size)
+    read_length = chunks_to_read * CIPHER.chunk_size
+
     # read file
     with open(path, "rb") as fd:
-        fd.seek(start)
-        sbytes = fd.read(length)
-    assert len(sbytes) == length
+        fd.seek(start_index)
+        sbytes = fd.read(read_length)
+    bytes_jumped = chunk_jumped * CIPHER.block_size
+    bytes_to_jump = start - bytes_jumped
+    data = bytes()
+    for i in range(chunks_to_read):
+        chunk = sbytes[i * CIPHER.chunk_size:][:CIPHER.chunk_size]
+        plain = CIPHER.decrypt(chunk)
+        len_plain = len(plain)
+        plain = plain[bytes_to_jump:]
+        bytes_to_jump -= len_plain - len(plain)
+        len_plain = len(plain)
+        if length < len_plain:
+            data += plain[:length]
+            length = 0
+            break
+        data += plain
+        length -= len_plain
 
     response = Response(
-        sbytes,
+        data,
         206,
-        mimetype=mimetypes.guess_type(path)[0],
+        mimetype='video/mp4',
         direct_passthrough=True,
     )
     response.headers.add(
@@ -88,7 +112,7 @@ def start_tornado(event_loop, http_server, port):
     IOLoop.instance().start()
 
 def main():
-    global PATH, PASSWORD, CHUNK_SIZE
+    global PATH, PASSWORD, CHUNK_SIZE, FILE_SIZE, CIPHER
     parser = argparse.ArgumentParser(description=DESC)
     parser.add_argument("file_path", type=str,
                         help="The encrypted file to be played.")
@@ -102,6 +126,9 @@ def main():
     PATH = args.file_path
     PASSWORD = args.password
     CHUNK_SIZE = args.chunk_size
+    CIPHER = AESCipher(PASSWORD, CHUNK_SIZE)
+    FILE_SIZE = get_plain_size(PATH, CIPHER)
+
     logging.basicConfig(level=logging.INFO)
     HOST = "0.0.0.0"
     http_server = HTTPServer(WSGIContainer(app))
