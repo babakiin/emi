@@ -19,7 +19,7 @@ iniparse==0.4
 IPy==0.81
 isc==2.0
 itsdangerous==0.24
-Jinja2==2.10
+Jinja2==2.11.3
 langtable==0.0.38
 Mako==1.0.6.dev0
 MarkupSafe==0.23
