@@ -66,6 +66,6 @@ sos==3.5
 SSSDConfig==1.16.0
 systemd-python==234
 tornado==5.0.1
-urllib3==1.22
+urllib3==1.26.5
 Werkzeug==0.14.1
 wrapt==1.10.10
